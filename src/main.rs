@@ -7,4 +7,8 @@ fn main() {
     for table in inspector.get_tables() {
         println!("{}", table);
     }
+
+    for column in inspector.get_columns_infos() {
+        println!("{}", column);
+    }
 }

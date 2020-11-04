@@ -43,6 +43,32 @@ impl Display for TableList {
    }
 }
 
+#[derive(Debug,sqlx::FromRow)]
+pub struct ColumnInfo {
+    table_name: String,
+    column_name: String,
+    is_nullable: String,
+    column_type: String,
+    column_key: Option<String>,
+}
+
+impl Display for ColumnInfo {
+   fn fmt(&self, f: &mut Formatter) -> fmt::Result { 
+        let nullable = match self.is_nullable.as_str() {
+            "YES"   => "",
+            "NO"    => "NOT NULL",
+            a       =>  a,
+        };
+
+        let column_key = match &self.column_key {
+            Some(key)   => key,
+            None        => "",
+        };
+
+       write!(f, "{:15} {:>15} | {} | {} | {}", self.table_name, self.column_name, self.column_type, nullable, column_key)
+   }
+}
+
 impl DatabaseInspector {
     pub fn new(url: &str) -> DatabaseInspector {
         let pool = block_on(MySqlPool::new(url)).unwrap();
@@ -63,6 +89,25 @@ impl DatabaseInspector {
         ";
 
         block_on(sqlx::query_as::<_, TableList>(sql)
+            .bind("akeneo_pim")
+            .fetch_all(&self.pool)
+            ).unwrap()
+    }
+
+    pub fn get_columns_infos(&self) -> Vec<ColumnInfo> {
+        let sql = r"
+select
+    TABLE_NAME      as table_name,
+    COLUMN_NAME     as column_name,
+    IS_NULLABLE     as is_nullable,
+    COLUMN_TYPE     as column_type,
+    COLUMN_KEY      as column_key
+from information_schema.COLUMNS
+where TABLE_SCHEMA=?
+order by TABLE_NAME asc, ORDINAL_POSITION asc
+        ";
+
+        block_on(sqlx::query_as::<_, ColumnInfo>(sql)
             .bind("akeneo_pim")
             .fetch_all(&self.pool)
             ).unwrap()
