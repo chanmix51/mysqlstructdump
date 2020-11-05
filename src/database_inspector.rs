@@ -13,7 +13,7 @@ pub struct TableList {
     table_type: String,
     table_rows: Option<u32>,
     index_length: Option<u32>,
-    auto_increment: Option<u8>,
+    auto_increment: Option<u32>,
 }
 
 impl Display for TableList {
@@ -35,8 +35,8 @@ impl Display for TableList {
         };
 
         let auto_increment = match self.auto_increment {
-            Some(1)     => "Y".to_string(),
-            _           => "N".to_string(),
+            Some(a)     => format!("{}", a),
+            _           => "x".to_string(),
         };
         
        write!(f, "{:5} {:>15} | {} rows | {} bytes | {}", table_type, self.table_name, table_rows, index_length, auto_increment)
@@ -119,14 +119,50 @@ order by TABLE_NAME asc, ORDINAL_POSITION asc
 mod tests {
     use super::*;
 
+    async fn create_db() -> Result<(), sqlx::Error> {
+        let pool = MySqlPool::new("mysql://root:root@mysql.lxc/mysql").await?;
+        sqlx::query("create database akeneo_pim").execute(&pool).await?;
+
+        Ok(())
+    }
+
+    async fn setup_db() -> Result<MySqlPool, sqlx::Error> {
+        let _ = create_db().await?;
+        let pool = MySqlPool::new("mysql://root:root@mysql.lxc/akeneo_pim").await?;
+
+        let queries = &[
+            "create table `chu` (`something` int default null)  ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+            "create view `john` AS select 1 AS `something`, 1 AS `id`, 1 AS `name`",
+            "create table `pika` (`id` int not null auto_increment, `name` text not null, primary key (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci",
+            "insert into chu () values ()",
+            "analyze table chu",
+            "analyze table pika",
+            ];
+
+            for query in queries {
+                sqlx::query(query).execute(&pool).await?;
+            }
+
+            Ok(pool)
+    }
+
+    async fn tear_down_db() -> Result<(), sqlx::Error> {
+        let pool = MySqlPool::new("mysql://root:root@mysql.lxc/mysql").await?;
+        sqlx::query("drop database akeneo_pim").execute(&pool).await?;
+
+        Ok(())
+    }
+
     #[test]
     pub fn test_table_inspector() {
+        let _pool = block_on(setup_db()).unwrap();
         let inspector = DatabaseInspector::new("mysql://root:root@mysql.lxc/akeneo_pim");
         let result = inspector.get_tables();
         let tables = result.as_slice();
 
-        assert_eq!("chu".to_string(), tables[0].table_name);
-        assert_eq!("VIEW".to_string(), tables[1].table_type);
-        assert_eq!(Some(1), tables[2].auto_increment);
+        assert_eq!("chu".to_string(), tables[0].table_name, "First table is 'chu'.");
+        assert_eq!("VIEW".to_string(), tables[1].table_type, "John is a view.");
+        assert_eq!(Some(1), tables[2].auto_increment, "Table pika has an auto-increment identifier.");
+        let _ = block_on(tear_down_db()).unwrap();
     }
 }

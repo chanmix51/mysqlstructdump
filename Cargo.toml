@@ -1,5 +1,5 @@
 [package]
-name = "mysqldiff"
+name = "mysqlstructdump"
 version = "0.1.0"
 authors = ["greg"]
 edition = "2018"
